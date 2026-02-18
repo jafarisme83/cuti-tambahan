@@ -2,70 +2,46 @@ import io
 from datetime import datetime
 
 import streamlit as st
-import gspread
-from google.oauth2 import service_account
+from st_gsheets_connection import GSheetsConnection
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from pypdf import PdfReader, PdfWriter
 
 
-# ================== KONEKSI GOOGLE SHEETS ==================
+# ================== KONFIGURASI GOOGLE SHEETS ==================
 
+# Buat koneksi ke Sheets (pakai secrets [connections.gsheets])
 @st.cache_resource
-def get_gspread_client():
-    service_info = st.secrets["gcp_service_account"]
+def get_gsheets_conn():
+    return st.connection("gsheets", type=GSheetsConnection)
 
-    credentials = service_account.Credentials.from_service_account_info(
-        dict(service_info),
-        scopes=[
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ],
-    )
-    return gspread.authorize(credentials)
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1kR7zbXQC5CQ_yO6C388JaIbgdlU03Tv85D6vrHPkELw/edit?gid=1799493562#gid=1799493562"
 
 
-# Ganti dengan ID spreadsheet Anda
-SPREADSHEET_ID = "1kR7zbXQC5CQ_yO6C388JaIbgdlU03Tv85D6vrHPkELw"
-PEG_SHEET_NAME = "pegawai"
-COUNTER_SHEET_NAME = "counter"
+def get_pegawai_list_and_nip():
+    conn = get_gsheets_conn()
+    # Sheet "pegawai" harus punya header: Nama, NIP
+    df_peg = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="pegawai")
+    df_peg = df_peg.dropna(subset=["Nama"])
+    nama_list = df_peg["Nama"].tolist()
+    nip_map = dict(zip(df_peg["Nama"], df_peg["NIP"]))
+    return nama_list, nip_map
 
 
-@st.cache_resource
-def get_worksheets():
-    client = get_gspread_client()
-    sh = client.open_by_key(SPREADSHEET_ID)
-    peg_sheet = sh.worksheet(PEG_SHEET_NAME)
-    counter_sheet = sh.worksheet(COUNTER_SHEET_NAME)
-    return peg_sheet, counter_sheet
-
-
-def get_auto_increment_number():
-    _, counter_sheet = get_worksheets()
-    current_val = counter_sheet.acell("A2").value
+def get_counter_and_increment():
+    conn = get_gsheets_conn()
+    df_counter = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="counter")
+    # Asumsi cell A2 berisi current_number, dengan header "current_number" di baris 1
+    current_val = df_counter.loc[0, "current_number"]
     if not current_val:
         current = 1
     else:
         current = int(current_val)
     next_val = current + 1
-    counter_sheet.update_acell("A2", str(next_val))
+    df_counter.loc[0, "current_number"] = next_val
+    conn.update(spreadsheet=SPREADSHEET_URL, worksheet="counter", data=df_counter)
     return current
-
-
-def get_pegawai_list():
-    peg_sheet, _ = get_worksheets()
-    data = peg_sheet.get_all_records()
-    return [row["Nama"] for row in data]
-
-
-def get_nip_by_name(nama):
-    peg_sheet, _ = get_worksheets()
-    data = peg_sheet.get_all_records()
-    for row in data:
-        if row["Nama"] == nama:
-            return str(row["NIP"])
-    return ""
 
 
 def format_tanggal_indonesia(date_obj):
@@ -201,30 +177,29 @@ def fill_cuti_on_template(
 def main():
     st.title("Form Mail Merge Cuti Tambahan (PDF)")
 
-    # Koneksi awal ke sheets (untuk memastikan kredensial OK)
-    get_worksheets()
+    # Ambil data pegawai + NIP
+    nama_list, nip_map = get_pegawai_list_and_nip()
 
     # Tanggal form
     tgl_form = st.date_input("Tanggal Formulir (kuning)", value=datetime.today())
     tgl_form_str = format_tanggal_indonesia(tgl_form)
 
-    # Nomor auto
+    # Nomor auto-increment
     if "nomor_auto" not in st.session_state:
-        st.session_state["nomor_auto"] = get_auto_increment_number()
+        st.session_state["nomor_auto"] = get_counter_and_increment()
 
     col_num1, col_num2 = st.columns([1, 2])
     with col_num1:
         if st.button("Ambil nomor baru"):
-            st.session_state["nomor_auto"] = get_auto_increment_number()
+            st.session_state["nomor_auto"] = get_counter_and_increment()
     nomor_auto = st.session_state["nomor_auto"]
     st.write(f"Nomor urut: {nomor_auto}")
     nomor_surat_default = f"SICTb-{nomor_auto}/KPN.0603/2025"
     nomor_surat = st.text_input("Nomor Surat (hijau)", value=nomor_surat_default)
 
     # Nama & NIP
-    pegawai_list = get_pegawai_list()
-    nama_pegawai = st.selectbox("Nama Pegawai (abu-abu)", options=pegawai_list)
-    nip_pegawai = get_nip_by_name(nama_pegawai)
+    nama_pegawai = st.selectbox("Nama Pegawai (abu-abu)", options=nama_list)
+    nip_pegawai = nip_map.get(nama_pegawai, "")
     st.text_input("NIP Pegawai (linked, abu-abu)", value=nip_pegawai, disabled=True)
 
     # Input pink
