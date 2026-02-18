@@ -2,72 +2,56 @@ import io
 from datetime import datetime
 
 import streamlit as st
-import gspread
-from google.oauth2 import service_account
+from st_gsheets_connection import GSheetsConnection
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from pypdf import PdfReader, PdfWriter
 
-# ============== KONFIGURASI GOOGLE SHEETS ==============
 
-# Ambil service account dari secrets.toml:
-# [gcp_service_account]
-# type = "service_account"
-# project_id = "..."
-# dst.
-service_info = st.secrets["gcp_service_account"]
+# ================== KONFIGURASI GOOGLE SHEETS ==================
 
-credentials = service_account.Credentials.from_service_account_info(
-    dict(service_info)
-)
+# Buat koneksi ke Sheets (pakai secrets [connections.gsheets])
+@st.cache_resource
+def get_gsheets_conn():
+    return st.connection("gsheets", type=GSheetsConnection)
 
-client = gspread.authorize(credentials)
-
-# GANTI dengan ID Spreadsheet Anda
-SPREADSHEET_ID = "1kR7zbXQC5CQ_yO6C388JaIbgdlU03Tv85D6vrHPkELw"
-PEG_SHEET_NAME = "pegawai"
-COUNTER_SHEET_NAME = "counter"
-
-peg_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(PEG_SHEET_NAME)
-counter_sheet = client.open_by_key(SPREADSHEET_ID).worksheet(COUNTER_SHEET_NAME)
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1kR7zbXQC5CQ_yO6C388JaIbgdlU03Tv85D6vrHPkELw/edit?gid=1799493562#gid=1799493562"
 
 
-def get_auto_increment_number():
-    current_val = counter_sheet.acell("A2").value
+def get_pegawai_list_and_nip():
+    conn = get_gsheets_conn()
+    # Sheet "pegawai" harus punya header: Nama, NIP
+    df_peg = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="pegawai")
+    df_peg = df_peg.dropna(subset=["Nama"])
+    nama_list = df_peg["Nama"].tolist()
+    nip_map = dict(zip(df_peg["Nama"], df_peg["NIP"]))
+    return nama_list, nip_map
+
+
+def get_counter_and_increment():
+    conn = get_gsheets_conn()
+    df_counter = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="counter")
+    # Asumsi cell A2 berisi current_number, dengan header "current_number" di baris 1
+    current_val = df_counter.loc[0, "current_number"]
     if not current_val:
         current = 1
     else:
         current = int(current_val)
     next_val = current + 1
-    counter_sheet.update_acell("A2", str(next_val))
+    df_counter.loc[0, "current_number"] = next_val
+    conn.update(spreadsheet=SPREADSHEET_URL, worksheet="counter", data=df_counter)
     return current
 
 
-def get_pegawai_list():
-    data = peg_sheet.get_all_records()
-    return [row["Nama"] for row in data]
-
-
-def get_nip_by_name(nama):
-    data = peg_sheet.get_all_records()
-    for row in data:
-        if row["Nama"] == nama:
-            return str(row["NIP"])
-    return ""
-
-
 def format_tanggal_indonesia(date_obj):
-    # input: datetime.date
-    # output: "1 September 2025"
     try:
-        # Untuk Linux, %-d; jika di Windows harus diganti %#d (Streamlit Cloud pakai Linux)
         return date_obj.strftime("%-d %B %Y")
     except ValueError:
         return date_obj.strftime("%d %B %Y")
 
 
-# ============== GENERATE PDF DARI TEMPLATE ==============
+# ================== GENERATE PDF DARI TEMPLATE ==================
 
 TEMPLATE_PATH = "Form-Cuti-Tambahan-2025-SIC-Tb-23-Jafar.pdf"
 PAGE_SIZE = A4
@@ -98,24 +82,16 @@ def fill_cuti_on_template(
     nama_pejabat_berwenang,
     nip_pejabat_berwenang,
 ):
-    """
-    output_buffer: io.BytesIO (atau file-like) yang akan berisi PDF final.
-    """
-
-    # 1) Buat overlay PDF di memory
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=PAGE_SIZE)
     width, height = PAGE_SIZE
 
-    # --- Header tanggal ---
+    # Header tanggal & nomor
     can.setFont("Helvetica", 10)
     can.drawString(150 * mm, 285 * mm, tanggal_form)
-
-    # --- Nomor surat ---
-    can.setFont("Helvetica", 10)
     can.drawCentredString(width / 2, 268 * mm, f"NOMOR {nomor_surat}")
 
-    # --- I. DATA PEGAWAI ---
+    # I. DATA PEGAWAI
     can.setFont("Helvetica", 10)
     can.drawString(50 * mm, 252 * mm, nama_pegawai)
     can.drawString(50 * mm, 246 * mm, nip_pegawai)
@@ -123,7 +99,7 @@ def fill_cuti_on_template(
     can.drawString(50 * mm, 234 * mm, masa_kerja)
     can.drawString(50 * mm, 228 * mm, unit_kerja)
 
-    # --- II. JENIS CUTI ---
+    # II. JENIS CUTI
     jenis_list = [
         "Cuti tahunan",
         "Cuti Besar",
@@ -136,37 +112,36 @@ def fill_cuti_on_template(
     can.setFont("Helvetica", 12)
     for jn in jenis_list:
         if jn.lower() == jenis_cuti.lower():
-            # X/Y harus di-finetune agar tepat di kotak centang
             can.drawString(70 * mm, y_jenis * mm, "✓")
         y_jenis -= 6
 
-    # --- III. ALASAN CUTI ---
+    # III. ALASAN CUTI
     can.setFont("Helvetica", 10)
     can.drawString(20 * mm, 174 * mm, alasan_cuti)
 
-    # --- IV. LAMANYA CUTI ---
+    # IV. LAMANYA CUTI
     can.drawString(40 * mm, 160 * mm, lama_cuti)
     can.drawString(60 * mm, 154 * mm, tanggal_mulai)
     can.drawString(120 * mm, 154 * mm, tanggal_selesai)
 
-    # --- V. CATATAN CUTI (sisa) ---
+    # V. CATATAN CUTI
     can.setFont("Helvetica", 9)
     can.drawString(40 * mm, 128 * mm, str(sisa_cuti_2023))
     can.drawString(40 * mm, 122 * mm, str(sisa_cuti_2024))
     can.drawString(40 * mm, 116 * mm, str(sisa_cuti_2025))
     can.drawString(120 * mm, 128 * mm, str(sisa_cuti_tambahan_2025))
 
-    # --- VI. ALAMAT CUTI ---
+    # VI. ALAMAT CUTI
     can.setFont("Helvetica", 10)
     can.drawString(20 * mm, 100 * mm, alamat_cuti)
     can.drawString(35 * mm, 94 * mm, telp)
 
-    # --- TTD pemohon ---
+    # TTD pemohon
     can.drawString(140 * mm, 84 * mm, nama_pegawai)
     can.setFont("Helvetica", 8)
     can.drawString(140 * mm, 80 * mm, f"NIP {nip_pegawai}")
 
-    # --- VII. Atasan langsung (DISETUJUI dicentang) ---
+    # VII. Atasan langsung
     can.setFont("Helvetica", 12)
     can.drawString(60 * mm, 66 * mm, "✓")
     can.setFont("Helvetica", 10)
@@ -174,7 +149,7 @@ def fill_cuti_on_template(
     can.setFont("Helvetica", 8)
     can.drawString(140 * mm, 44 * mm, f"NIP {nip_atasan_langsung}")
 
-    # --- VIII. Pejabat berwenang (DISETUJUI dicentang) ---
+    # VIII. Pejabat berwenang
     can.setFont("Helvetica", 12)
     can.drawString(60 * mm, 30 * mm, "✓")
     can.setFont("Helvetica", 10)
@@ -185,13 +160,10 @@ def fill_cuti_on_template(
     can.save()
     packet.seek(0)
 
-    # 2) Merge overlay dengan template
     overlay_pdf = PdfReader(packet)
     template_pdf = PdfReader(open(TEMPLATE_PATH, "rb"))
-
     template_page = template_pdf.pages[0]
     overlay_page = overlay_pdf.pages[0]
-
     template_page.merge_page(overlay_page)
 
     writer = PdfWriter()
@@ -200,40 +172,40 @@ def fill_cuti_on_template(
     output_buffer.seek(0)
 
 
-# ============== STREAMLIT UI ==============
+# ================== STREAMLIT UI ==================
 
 def main():
     st.title("Form Mail Merge Cuti Tambahan (PDF)")
 
-    # --- Tanggal form (kuning) ---
+    # Ambil data pegawai + NIP
+    nama_list, nip_map = get_pegawai_list_and_nip()
+
+    # Tanggal form
     tgl_form = st.date_input("Tanggal Formulir (kuning)", value=datetime.today())
     tgl_form_str = format_tanggal_indonesia(tgl_form)
 
-    # --- Auto-increment nomor urut (hijau) ---
+    # Nomor auto-increment
     if "nomor_auto" not in st.session_state:
-        st.session_state["nomor_auto"] = get_auto_increment_number()
+        st.session_state["nomor_auto"] = get_counter_and_increment()
 
     col_num1, col_num2 = st.columns([1, 2])
     with col_num1:
         if st.button("Ambil nomor baru"):
-            st.session_state["nomor_auto"] = get_auto_increment_number()
+            st.session_state["nomor_auto"] = get_counter_and_increment()
     nomor_auto = st.session_state["nomor_auto"]
     st.write(f"Nomor urut: {nomor_auto}")
-
     nomor_surat_default = f"SICTb-{nomor_auto}/KPN.0603/2025"
-    nomor_surat = st.text_input("Nomor Surat (hijau, masih bisa di-edit)", value=nomor_surat_default)
+    nomor_surat = st.text_input("Nomor Surat (hijau)", value=nomor_surat_default)
 
-    # --- Nama & NIP (abu-abu) dari Google Sheets ---
-    pegawai_list = get_pegawai_list()
-    nama_pegawai = st.selectbox("Nama Pegawai (abu-abu)", options=pegawai_list)
-    nip_pegawai = get_nip_by_name(nama_pegawai)
+    # Nama & NIP
+    nama_pegawai = st.selectbox("Nama Pegawai (abu-abu)", options=nama_list)
+    nip_pegawai = nip_map.get(nama_pegawai, "")
     st.text_input("NIP Pegawai (linked, abu-abu)", value=nip_pegawai, disabled=True)
 
-    # --- Input manual (pink) ---
+    # Input pink
     jabatan = st.text_input("Jabatan (pink)", value="")
     masa_kerja = st.text_input("Masa Kerja (pink)", value="")
     unit_kerja = st.text_area("Unit Kerja (pink)", value="")
-
     jenis_cuti = st.selectbox(
         "Jenis Cuti (pink)",
         [
@@ -246,10 +218,8 @@ def main():
         ],
         index=0,
     )
-
     alasan_cuti = st.text_area("Alasan Cuti (pink)", value="")
     lama_cuti = st.text_input("Lamanya Cuti (contoh: 6 hari, pink)", value="")
-
     tgl_mulai = st.date_input("Tanggal Mulai Cuti (pink)", value=datetime.today())
     tgl_selesai = st.date_input("Tanggal Selesai Cuti (pink)", value=datetime.today())
     tgl_mulai_str = format_tanggal_indonesia(tgl_mulai)
@@ -266,15 +236,11 @@ def main():
     alamat_cuti = st.text_area("Alamat Selama Cuti (pink)", value="")
     telp = st.text_input("Telp (pink)", value="")
 
-    st.markdown("---")
     st.subheader("Data Atasan dan Pejabat Berwenang")
-
     nama_atasan_langsung = st.text_input("Nama Atasan Langsung", value="Setiyono")
     nip_atasan_langsung = st.text_input("NIP Atasan Langsung", value="197311161996021001")
     nama_pejabat_berwenang = st.text_input("Nama Pejabat Berwenang", value="Setiyono")
     nip_pejabat_berwenang = st.text_input("NIP Pejabat Berwenang", value="197311161996021001")
-
-    st.markdown("---")
 
     if st.button("Generate PDF"):
         buffer = io.BytesIO()
