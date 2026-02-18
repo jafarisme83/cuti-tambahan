@@ -4,3 +4,4 @@ streamlit
 st-gsheets-connection
 reportlab
 pypdf
+pandas
