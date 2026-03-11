@@ -121,32 +121,6 @@ def merge_pdfs(template_path, overlay_packet):
     return output
 
 def generate_pdf(pegawai_data, form_data):
-    """Generate final PDF"""
-    nama = form_data['nama_pegawai']
-    if nama not in pegawai_data:
-        raise ValueError(f"Pegawai '{nama}' tidak ditemukan")
-    
-    pegawai_info = pegawai_data[nama]
-    nomor_surat = get_next_nomor_surat()
-    
-    complete_data = {
-        'tanggalSurat': form_data['tanggal_surat'],
-        'nomorSurat': f"{nomor_surat:04d}",
-        'namaPegawai': nama,
-        'nipPegawai': pegawai_info['nip'],
-        'jabatan': pegawai_info['jabatan'],
-        'atasanLangsung': pegawai_info['atasan'],
-        'nipAtasan': pegawai_info['nip_atasan'],
-        'masaKerja': form_data['masa_kerja'],
-        'jumlahHari': form_data['jumlah_hari'],
-        'cutiTahunanSisa1': form_data['cuti_tahunan_sisa1'],
-        'cutiTahunanSisa2': form_data['cuti_tahunan_sisa2'],
-        'cutiTahunanTambahanSisa': form_data['cuti_tambahan_sisa'],
-        'alamatCuti': form_data['alamat_cuti'],
-        'telpCuti': form_data['telp_cuti']
-    }
-    
-    def generate_pdf(pegawai_data, form_data):
     """Generate final PDF (tanpa template, langsung dengan ReportLab)"""
     # Ambil data pegawai
     nama = form_data['nama_pegawai']
@@ -210,7 +184,7 @@ def generate_pdf(pegawai_data, form_data):
     c.drawString(margin_x, y, f"Masa Kerja     : {complete_data['masaKerja']}")
     y -= 1.5 * line_h
 
-    # Section II: Jenis Cuti (disederhanakan)
+    # Section II: Jenis Cuti
     c.setFont("Helvetica-Bold", 11)
     c.drawString(margin_x, y, "II. JENIS CUTI")
     y -= 7 * mm
@@ -255,6 +229,7 @@ def generate_pdf(pegawai_data, form_data):
     pdf_buffer.seek(0)
 
     return pdf_buffer, complete_data
+
 
 # ============================================
 # STREAMLIT APP
