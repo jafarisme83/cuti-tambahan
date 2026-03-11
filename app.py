@@ -146,13 +146,114 @@ def generate_pdf(pegawai_data, form_data):
         'telpCuti': form_data['telp_cuti']
     }
     
-    result_pdf = fill_pdf_form(TEMPLATE_PDF, complete_data)
-    
-    # Save to BytesIO for download
+    def generate_pdf(pegawai_data, form_data):
+    """Generate final PDF (tanpa template, langsung dengan ReportLab)"""
+    # Ambil data pegawai
+    nama = form_data['nama_pegawai']
+    if nama not in pegawai_data:
+        raise ValueError(f"Pegawai '{nama}' tidak ditemukan")
+
+    pegawai_info = pegawai_data[nama]
+    nomor_surat = get_next_nomor_surat()
+
+    # Susun data lengkap
+    complete_data = {
+        'tanggalSurat': form_data['tanggal_surat'],
+        'nomorSurat': f"{nomor_surat:04d}",
+        'namaPegawai': nama,
+        'nipPegawai': pegawai_info['nip'],
+        'jabatan': pegawai_info['jabatan'],
+        'atasanLangsung': pegawai_info['atasan'],
+        'nipAtasan': pegawai_info['nip_atasan'],
+        'masaKerja': form_data['masa_kerja'],
+        'jumlahHari': form_data['jumlah_hari'],
+        'cutiTahunanSisa1': form_data['cuti_tahunan_sisa1'],
+        'cutiTahunanSisa2': form_data['cuti_tahunan_sisa2'],
+        'cutiTahunanTambahanSisa': form_data['cuti_tambahan_sisa'],
+        'alamatCuti': form_data['alamat_cuti'],
+        'telpCuti': form_data['telp_cuti'],
+    }
+
+    # Buat PDF di memory
     pdf_buffer = io.BytesIO()
-    result_pdf.write(pdf_buffer)
+    c = canvas.Canvas(pdf_buffer, pagesize=A4)
+    width, height = A4
+
+    # Margin
+    margin_x = 25 * mm
+    y = height - 25 * mm
+
+    # Header
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(width / 2, y, "FORMULIR PERMINTAAN DAN PEMBERIAN CUTI")
+    y -= 12 * mm
+
+    # Tanggal & nomor surat
+    c.setFont("Helvetica", 10)
+    c.drawRightString(width - margin_x, height - 25 * mm, f"Tanggal: {complete_data['tanggalSurat']}")
+    c.drawRightString(width - margin_x, height - 30 * mm, f"No: {complete_data['nomorSurat']}")
+
+    # Section I: Data Pegawai
+    y -= 5 * mm
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin_x, y, "I. DATA PEGAWAI")
+    y -= 7 * mm
+    c.setFont("Helvetica", 10)
+    line_h = 6 * mm
+
+    c.drawString(margin_x, y, f"Nama           : {complete_data['namaPegawai']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"NIP            : {complete_data['nipPegawai']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"Jabatan        : {complete_data['jabatan']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"Masa Kerja     : {complete_data['masaKerja']}")
+    y -= 1.5 * line_h
+
+    # Section II: Jenis Cuti (disederhanakan)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin_x, y, "II. JENIS CUTI")
+    y -= 7 * mm
+    c.setFont("Helvetica", 10)
+    c.drawString(margin_x, y, f"Jumlah hari cuti: {complete_data['jumlahHari']} hari")
+    y -= 1.5 * line_h
+
+    # Section III: Sisa Cuti
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin_x, y, "III. SISA CUTI")
+    y -= 7 * mm
+    c.setFont("Helvetica", 10)
+    c.drawString(margin_x, y, f"Sisa Cuti Tahunan 2025 : {complete_data['cutiTahunanSisa1']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"Sisa Cuti Tahunan 2026 : {complete_data['cutiTahunanSisa2']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"Sisa Cuti Tambahan 2026: {complete_data['cutiTahunanTambahanSisa']}")
+    y -= 1.5 * line_h
+
+    # Section IV: Alamat Cuti
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin_x, y, "IV. ALAMAT SELAMA CUTI")
+    y -= 7 * mm
+    c.setFont("Helvetica", 10)
+    c.drawString(margin_x, y, f"Alamat : {complete_data['alamatCuti']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"Telepon: {complete_data['telpCuti']}")
+    y -= 1.5 * line_h
+
+    # Section V: Atasan
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin_x, y, "V. PERTIMBANGAN ATASAN LANGSUNG")
+    y -= 7 * mm
+    c.setFont("Helvetica", 10)
+    c.drawString(margin_x, y, f"Atasan Langsung : {complete_data['atasanLangsung']}")
+    y -= line_h
+    c.drawString(margin_x, y, f"NIP Atasan      : {complete_data['nipAtasan']}")
+
+    # Selesai
+    c.showPage()
+    c.save()
     pdf_buffer.seek(0)
-    
+
     return pdf_buffer, complete_data
 
 # ============================================
