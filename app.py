@@ -119,7 +119,7 @@ def merge_pdfs(template_path, overlay_packet):
     
     return output
 
-def generate_pdf(pegawai_data, form_data):
+def generate_docx_from_template(pegawai_data, form_data):
     """Generate final PDF"""
     nama = form_data['nama_pegawai']
     if nama not in pegawai_data:
