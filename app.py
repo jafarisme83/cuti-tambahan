@@ -22,7 +22,7 @@ st.set_page_config(
 # ============================================
 # CONFIGURATION
 # ============================================
-TEMPLATE_DOCX = 'template-placeholder.docx'
+TEMPLATE_DOCX = 'template placeholder.docx'
 COUNTER_FILE = 'nomor_surat_counter.txt'
 
 # ============================================
