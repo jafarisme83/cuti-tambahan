@@ -2,9 +2,7 @@
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
+from docxtpl import DocxTemplate
 from datetime import datetime
 import io
 import os
@@ -22,6 +20,7 @@ st.set_page_config(
 # ============================================
 # CONFIGURATION
 # ============================================
+TEMPLATE_DOCX = 'template-placeholder.docx'
 COUNTER_FILE = 'nomor_surat_counter.txt'
 
 # ============================================
@@ -121,16 +120,14 @@ def merge_pdfs(template_path, overlay_packet):
     return output
 
 def generate_pdf(pegawai_data, form_data):
-    """Generate final PDF (tanpa template, langsung dengan ReportLab)"""
-    # Ambil data pegawai
+    """Generate final PDF"""
     nama = form_data['nama_pegawai']
     if nama not in pegawai_data:
         raise ValueError(f"Pegawai '{nama}' tidak ditemukan")
-
+    
     pegawai_info = pegawai_data[nama]
     nomor_surat = get_next_nomor_surat()
-
-    # Susun data lengkap
+    
     complete_data = {
         'tanggalSurat': form_data['tanggal_surat'],
         'nomorSurat': f"{nomor_surat:04d}",
@@ -145,91 +142,17 @@ def generate_pdf(pegawai_data, form_data):
         'cutiTahunanSisa2': form_data['cuti_tahunan_sisa2'],
         'cutiTahunanTambahanSisa': form_data['cuti_tambahan_sisa'],
         'alamatCuti': form_data['alamat_cuti'],
-        'telpCuti': form_data['telp_cuti'],
+        'telpCuti': form_data['telp_cuti']
     }
-
-    # Buat PDF di memory
+    
+    result_pdf = fill_pdf_form(TEMPLATE_PDF, complete_data)
+    
+    # Save to BytesIO for download
     pdf_buffer = io.BytesIO()
-    c = canvas.Canvas(pdf_buffer, pagesize=A4)
-    width, height = A4
-
-    # Margin
-    margin_x = 25 * mm
-    y = height - 25 * mm
-
-    # Header
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(width / 2, y, "FORMULIR PERMINTAAN DAN PEMBERIAN CUTI")
-    y -= 12 * mm
-
-    # Tanggal & nomor surat
-    c.setFont("Helvetica", 10)
-    c.drawRightString(width - margin_x, height - 25 * mm, f"Tanggal: {complete_data['tanggalSurat']}")
-    c.drawRightString(width - margin_x, height - 30 * mm, f"No: {complete_data['nomorSurat']}")
-
-    # Section I: Data Pegawai
-    y -= 5 * mm
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(margin_x, y, "I. DATA PEGAWAI")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    line_h = 6 * mm
-
-    c.drawString(margin_x, y, f"Nama           : {complete_data['namaPegawai']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"NIP            : {complete_data['nipPegawai']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"Jabatan        : {complete_data['jabatan']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"Masa Kerja     : {complete_data['masaKerja']}")
-    y -= 1.5 * line_h
-
-    # Section II: Jenis Cuti
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(margin_x, y, "II. JENIS CUTI")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    c.drawString(margin_x, y, f"Jumlah hari cuti: {complete_data['jumlahHari']} hari")
-    y -= 1.5 * line_h
-
-    # Section III: Sisa Cuti
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(margin_x, y, "III. SISA CUTI")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    c.drawString(margin_x, y, f"Sisa Cuti Tahunan 2025 : {complete_data['cutiTahunanSisa1']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"Sisa Cuti Tahunan 2026 : {complete_data['cutiTahunanSisa2']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"Sisa Cuti Tambahan 2026: {complete_data['cutiTahunanTambahanSisa']}")
-    y -= 1.5 * line_h
-
-    # Section IV: Alamat Cuti
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(margin_x, y, "IV. ALAMAT SELAMA CUTI")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    c.drawString(margin_x, y, f"Alamat : {complete_data['alamatCuti']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"Telepon: {complete_data['telpCuti']}")
-    y -= 1.5 * line_h
-
-    # Section V: Atasan
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(margin_x, y, "V. PERTIMBANGAN ATASAN LANGSUNG")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    c.drawString(margin_x, y, f"Atasan Langsung : {complete_data['atasanLangsung']}")
-    y -= line_h
-    c.drawString(margin_x, y, f"NIP Atasan      : {complete_data['nipAtasan']}")
-
-    # Selesai
-    c.showPage()
-    c.save()
+    result_pdf.write(pdf_buffer)
     pdf_buffer.seek(0)
-
+    
     return pdf_buffer, complete_data
-
 
 # ============================================
 # STREAMLIT APP
@@ -303,9 +226,20 @@ def main():
                     min_value=1,
                     value=1
                 )
+                
+                col_tgl1, col_tgl2 = st.columns(2)
+                with col_tgl1:
+                    tanggal_mulai = st.date_input("Tanggal Mulai Cuti *")
+                with col_tgl2:
+                    tanggal_selesai = st.date_input("Tanggal Selesai Cuti *")
+                
+                alasan_cuti = st.text_area(
+                    "Alasan Cuti *",
+                    placeholder="Tulis alasan cuti"
+                )
             
             with col2:
-                st.subheader("Data Cuti")
+                st.subheader("Sisa Cuti")
                 cuti_tahunan_sisa1 = st.number_input(
                     "Sisa Cuti Tahunan 2025 *",
                     min_value=0,
@@ -347,6 +281,9 @@ def main():
                             'tanggal_surat': tanggal_formatted,
                             'masa_kerja': masa_kerja,
                             'jumlah_hari': str(jumlah_hari),
+                            'tanggal_mulai': tanggal_mulai.strftime("%d-%B-%Y"),
+                            'tanggal_selesai': tanggal_selesai.strftime("%d-%B-%Y"),
+                            'alasan_cuti': alasan_cuti,
                             'cuti_tahunan_sisa1': str(cuti_tahunan_sisa1),
                             'cuti_tahunan_sisa2': str(cuti_tahunan_sisa2),
                             'cuti_tambahan_sisa': str(cuti_tambahan_sisa),
