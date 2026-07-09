@@ -12,7 +12,7 @@ OUTPUT_DIR = "generated"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 GOOGLE_SHEET_ID = "1bNy8AurgGFLvRaKh3reeYNSoURCLzR6T3IKj1x0yHVk"
-SHEET_PEGAWAI = "Sheet1"
+SHEET_PEGAWAI = "DataPegawai"
 SHEET_KUOTA_PREFIX = "Kuota Cuti Tb "
 
 BULAN_ID = {
