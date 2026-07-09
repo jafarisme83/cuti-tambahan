@@ -120,8 +120,8 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="app-header">
-    <h1>🗂️ Formulir Permintaan &amp; Pemberian Cuti</h1>
-    <p>KPPN Tipe A2 Sungai Penuh · Generate PDF otomatis dari data pegawai</p>
+    <h1>🗂️ Formulir Cuti Tambahan</h1>
+    <p>KPPN Tipe A2 Sungai Penuh · Generate PDF Kemudian Upload Ke TTE Eksternal</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -254,14 +254,14 @@ with st.form("form_cuti"):
         st.text_input("NIP Atasan", value=str(nip_atasan), disabled=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-card"><div class="section-title">📅 Detail Surat</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-card"><div class="section-title">📅 Tanggal dan Nomor Surat</div>', unsafe_allow_html=True)
     tanggal_surat = st.date_input("Tanggal Surat", value=date.today())
     tahun_aktif = str(tanggal_surat.year)
     nomor_preview = get_next_nomor(tahun_aktif)
-    st.markdown(f'<div class="nomor-badge">📌 Nomor Surat berikutnya: {nomor_preview} (tahun {tahun_aktif})</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="nomor-badge">📌 Nomor Surat berikutnya: {nomor_preview}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-card"><div class="section-title">✍️ Input Manual</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-card"><div class="section-title">✍️ Input Data Cuti</div>', unsafe_allow_html=True)
     c3, c4 = st.columns(2)
     with c3:
         masa_kerja = st.text_input("Masa Kerja", placeholder="contoh: 5 Tahun 3 Bulan")
