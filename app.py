@@ -170,13 +170,13 @@ with st.form("form_cuti"):
     st.text_input("Atasan Langsung", value=atasan_langsung, disabled=True)
     st.text_input("NIP Atasan", value=str(nip_atasan), disabled=True)
 
-    st.subheader("II. Detail Surat")
+    st.subheader("II. Tanggal dan Nomor Surat")
     tanggal_surat = st.date_input("Tanggal Surat", value=date.today())
     tahun_aktif = str(tanggal_surat.year)
     nomor_preview = get_next_nomor(tahun_aktif)
-    st.info(f"Nomor Surat berikutnya: **{nomor_preview}** (auto-increment, tahun {tahun_aktif})")
+    st.info(f"Nomor Surat berikutnya: **{nomor_preview}** ")
 
-    st.subheader("III. Input Manual")
+    st.subheader("III. Input Data Cuti")
     masa_kerja = st.text_input("Masa Kerja (contoh: 5 Tahun 3 Bulan)")
     jumlah_hari = st.number_input("Jumlah Hari Cuti", min_value=1, step=1)
     cuti_sisa_1 = st.text_input("Sisa Cuti Tahunan 2025")
