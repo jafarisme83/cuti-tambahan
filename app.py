@@ -7,7 +7,7 @@ import subprocess, os, json
 from datetime import date
 
 # ---------- CONFIG ----------
-TEMPLATE_PATH = "template-placeholder.docx"
+TEMPLATE_PATH = "template placeholder.docx"
 OUTPUT_DIR = "generated"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
