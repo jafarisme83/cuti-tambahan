@@ -2,3 +2,5 @@ streamlit
 python-docx
 docxtpl
 pandas
+gspread
+google-auth
