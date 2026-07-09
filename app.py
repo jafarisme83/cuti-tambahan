@@ -151,7 +151,7 @@ def convert_docx_to_pdf(docx_path, out_dir):
 
 # ---------- STREAMLIT UI ----------
 st.set_page_config(page_title="Formulir Cuti - Mail Merge", layout="centered")
-st.title("Generator Formulir Cuti (Mail Merge PDF)")
+st.title("Formulir Cuti Tambahan")
 
 df_pegawai = load_pegawai()
 
