@@ -340,6 +340,7 @@ if submitted:
         filename_base = f"Cuti_{nama_pilihan.replace(' ', '_')}_{nomor_surat}"
         docx_out = os.path.join(OUTPUT_DIR, filename_base + ".docx")
         doc.save(docx_out)
+        sesuaikan_pejabat_pemberi_cuti(docx_out, nama_pilihan, atasan_langsung, str(nip_atasan))
 
         try:
             pdf_out = convert_docx_to_pdf(docx_out, OUTPUT_DIR)
