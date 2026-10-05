@@ -233,6 +233,35 @@ def convert_docx_to_pdf(docx_path, out_dir):
     ], check=True)
     return os.path.join(out_dir, os.path.splitext(os.path.basename(docx_path))[0] + ".pdf")
 
+def _set_paragraph_text(p, text):
+    if p.runs:
+        p.runs[0].text = text
+        for r in p.runs[1:]:
+            r.text = ""
+    else:
+        p.add_run(text)
+
+def sesuaikan_pejabat_pemberi_cuti(docx_path, nama_pegawai, atasan_langsung, nip_atasan):
+    """Jika pegawai = Setiyono, ubah jabatan, nama & NIP penandatangan pada bagian VIII."""
+    if nama_pegawai.strip().lower() != "setiyono":
+        return
+    from docx import Document
+    d = Document(docx_path)
+    for t in d.tables:
+        if "KEPUTUSAN PEJABAT" not in t._element.xpath("string(.)"):
+            continue
+        sel_unik = {id(c._tc): c for r in t.rows for c in r.cells}.values()
+        for c in sel_unik:
+            for p in c.paragraphs:
+                teks = p.text.strip()
+                if teks.startswith("Kepala Kantor Pelayanan Perbendaharaan Negara"):
+                    _set_paragraph_text(p, "Kepala Kantor Wilayah Ditjen Perbendaharaan Provinsi Jambi")
+                elif teks == "Setiyono":
+                    _set_paragraph_text(p, str(atasan_langsung))
+                elif teks.startswith("NIP"):
+                    _set_paragraph_text(p, f"NIP {nip_atasan}")
+    d.save(docx_path)
+
 # ---------- DATA PEGAWAI ----------
 df_pegawai = load_pegawai()
 
